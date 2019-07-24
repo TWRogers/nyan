@@ -1,5 +1,5 @@
 from setuptools import find_packages, setup
-from .yuxa.version import __version__
+from yuxa.version import __version__
 
 
 def readme():
@@ -28,7 +28,7 @@ setup(name='yuxa',
           'Pillow',
           'numpy',
           'Pillow',
-          'imagio',
+          'imageio',
           'opencv-python',
       ],
       tests_require=[
