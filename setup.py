@@ -1,5 +1,5 @@
 from setuptools import find_packages, setup
-from yuxa.version import __version__
+from nyan.version import __version__
 
 
 def readme():
@@ -9,14 +9,14 @@ def readme():
 
 extras_require = {}
 
-setup(name='yuxa',
+setup(name='nyan',
       author='Thomas W. Rogers',
       author_email='thomas.rogers08@gmail.com',
       version=__version__,
       description='A library for image and video transformation and mapping.',
       long_description=readme(),
       long_description_content_type='text/markdown',
-      url='https://github.com/TWRogers/yuxa',
+      url='https://github.com/TWRogers/nyan',
       license='Apache 2.0',
       packages=find_packages(),
       include_package_data=True,

@@ -1,5 +1,5 @@
 import pytest
-from yuxa.collections import Collection, COLOUR_MODES
+from nyan.collections import Collection, COLOUR_MODES
 import numpy as np
 
 
