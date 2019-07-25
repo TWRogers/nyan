@@ -13,10 +13,12 @@ class Collection(object):
 
         self.channel_mode = channel_mode
         self.debug_mode = debug_mode
-        if images is None:
-            self.images = []
-        else:
-            self.images = images
+
+        self.images = [] if images is None else images
+        self._original_images = [] if images is None else images.copy()
+
+        self._transform_history = {}
+        self.debug_history = {}
 
     @classmethod
     def from_array(cls,
@@ -48,37 +50,12 @@ class Collection(object):
                        channel_mode=channel_mode,
                        debug_mode=debug_mode)
 
-    @property
-    def __array_interface__(self) -> dict:
-        # support for casting to a numpy array
-        array = self.as_array()
-        return {"typestr": array.dtype,
-                "shape": self.shape,
-                "version": 3,
-                "data": array.tobytes()}
-
-    # @property
-    # def __array_interface__(self):
-    #     # numpy array interface support
-    #     new = {}
-    #     shape, typestr = _conv_type_shape(self)
-    #     new["shape"] = shape
-    #     new["typestr"] = typestr
-    #     new["version"] = 3
-    #     if self.mode == "1":
-    #         # Binary images need to be extended from bits to bytes
-    #         # See: https://github.com/python-pillow/Pillow/issues/350
-    #         new["data"] = self.tobytes("raw", "L")
-    #     else:
-    #         new["data"] = self.tobytes()
-    #     return new
-
     def as_array(self) -> np.ndarray:
         assert self.size is not None, 'All images must have same size to export as array.'
         return np.array(self.images)
 
     @property
-    def shape(self):
+    def shape(self) -> tuple:
         if self.images:
             shapes = list(set(map(lambda x: x.shape, self.images)))
             if len(shapes) == 1:
@@ -89,7 +66,7 @@ class Collection(object):
             return None
 
     @property
-    def size(self):
+    def size(self) -> tuple:
         if self.images:
             sizes = list(set(map(lambda x: x.shape[:2][::-1], self.images)))
             if len(sizes) == 1:
@@ -99,13 +76,104 @@ class Collection(object):
         else:
             return None
 
-    def __len__(self):
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            if key.step is None:
+                step = 1
+            else:
+                step = key.step
+            return [self.images[i] for i in range(key.start, key.stop, step)]
+
+        elif isinstance(key, tuple):
+            if isinstance(key[0], slice):
+                if key[0].step is None:
+                    step = 1
+                else:
+                    step = key[0].step
+                return [self.images[i][key[1:]] for i in range(key[0].start, key[0].stop, step)]
+            else:
+                return [self.images[key[0]][key[1:]]]
+
+        return self.images[key]
+
+    def __iter__(self) -> iter:
+        return iter(self.images)
+
+    def __eq__(self, other_object) -> bool:
+        raise NotImplementedError
+
+    def __len__(self) -> int:
         return len(self.images)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<{module}.{name} images channel_mode={channel_mode} size={size} at 0x{id}>".format(
             module=self.__class__.__module__,
             name=self.__class__.__name__,
             channel_mode=self.channel_mode,
             size=self.size,
             id=id(self))
+
+    def copy(self):
+
+
+        self.channel_mode = channel_mode
+        self.debug_mode = debug_mode
+
+        self.images = [] if images is None else images
+        self._original_images = [] if images is None else images.copy()
+
+        self._transform_history = {}
+        self.debug_history = {}
+
+        raise NotImplemented
+
+    def __add_to_transform_history(self,
+                                   crop: tuple = None,
+                                   resize: tuple = None,
+                                   pad: tuple = None):
+
+        self._transform_history.update({"crop": crop,
+                                        "resize": resize,
+                                        "pad": pad})
+
+    def transform_image(self, start_event, end_event) -> np.ndarray:
+        raise NotImplementedError
+
+    def transform_point(self, start_event, end_event) -> tuple:
+        raise NotImplementedError
+
+    def transform_box(self, start_event, end_event) -> tuple:
+        raise NotImplementedError
+
+    def transform_polygon(self, vertices, start_event, end_event) -> list:
+        raise NotImplementedError
+
+    def crop(self, cropping_params: dict) -> None:
+        raise NotImplementedError
+
+    def _crop(self) -> None:
+        raise NotImplementedError
+
+    def resize(self,
+               target_size: tuple,
+               preserve_aspect_ratio: bool = False) -> None:
+        raise NotImplementedError
+
+    def _resize(self) -> None:
+        raise NotImplementedError
+
+    def pad(self, padding_params) -> None:
+        raise NotImplementedError
+
+    def label_event(self) -> None:
+        raise NotImplementedError
+
+    @property
+    def __array_interface__(self) -> dict:
+        raise NotImplementedError
+    #     # support for casting to a numpy array
+    #     array = self.as_array()
+    #     return {"typestr": array.dtype,
+    #             "shape": self.shape,
+    #             "version": 3,
+    #             "data": array.tobytes()}
