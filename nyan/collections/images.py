@@ -1,13 +1,15 @@
+import typing
 import numpy as np
+from nyan import History
 
 
 COLOUR_MODES = ('RGB', 'BGR')
 
 
-class Collection(object):
+class Images(object):
 
     def __init__(self,
-                 images: list = None,
+                 images: typing.Optional[list] = None,
                  channel_mode: str = 'RGB',
                  debug_mode: bool = False) -> None:
 
@@ -17,13 +19,13 @@ class Collection(object):
         self.images = [] if images is None else images
         self._original_images = [] if images is None else images.copy()
 
-        self._transform_history = {}
-        self.debug_history = {}
+        self._transform_history = []
+        self._debug_history = []
 
     @classmethod
     def from_array(cls,
                    array: np.ndarray,
-                   channel_mode: str = 'RGB',
+                   channel_mode: typing.Optional[str] = 'RGB',
                    debug_mode: bool = False):
 
         if array.ndim == 4:
@@ -99,11 +101,11 @@ class Collection(object):
     def __iter__(self) -> iter:
         return iter(self.images)
 
-    def __eq__(self, other_object) -> bool:
-        raise NotImplementedError
-
     def __len__(self) -> int:
         return len(self.images)
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
 
     def __repr__(self) -> str:
         return "<{module}.{name} images channel_mode={channel_mode} size={size} at 0x{id}>".format(
@@ -115,22 +117,21 @@ class Collection(object):
 
     def copy(self):
 
+        new_copy = self.__class__()
 
-        self.channel_mode = channel_mode
-        self.debug_mode = debug_mode
+        new_copy.channel_mode = self.channel_mode
+        new_copy.debug_mode = self.debug_mode
+        new_copy.images = self.images.copy()
+        new_copy._original_images = self._original_images.copy()
+        new_copy._transform_history = self._transform_history.copy()
+        new_copy.debug_history = self.debug_history.copy()
 
-        self.images = [] if images is None else images
-        self._original_images = [] if images is None else images.copy()
-
-        self._transform_history = {}
-        self.debug_history = {}
-
-        raise NotImplemented
+        return new_copy
 
     def __add_to_transform_history(self,
-                                   crop: tuple = None,
-                                   resize: tuple = None,
-                                   pad: tuple = None):
+                                   crop: typing.Optional[tuple] = None,
+                                   resize: typing.Optional[tuple] = None,
+                                   pad: typing.Optional[tuple] = None):
 
         self._transform_history.update({"crop": crop,
                                         "resize": resize,
@@ -148,21 +149,35 @@ class Collection(object):
     def transform_polygon(self, vertices, start_event, end_event) -> list:
         raise NotImplementedError
 
+    @History.transform()
+    def _rotate(self):
+        raise NotImplementedError
+
+    @History.transform()
+    def _translate(self):
+        raise NotImplementedError
+
     def crop(self, cropping_params: dict) -> None:
         raise NotImplementedError
 
-    def _crop(self) -> None:
-        raise NotImplementedError
+    @History.transform()
+    def _crop(self, x_min: int, x_max: int, y_min: int, y_max: int) -> None:
+        self.images = [self.images[y_min:y_max, x_min:x_max]]
 
     def resize(self,
                target_size: tuple,
                preserve_aspect_ratio: bool = False) -> None:
         raise NotImplementedError
 
+    @History.transform()
     def _resize(self) -> None:
         raise NotImplementedError
 
     def pad(self, padding_params) -> None:
+        raise NotImplementedError
+
+    @History.transform()
+    def _pad(self):
         raise NotImplementedError
 
     def label_event(self) -> None:

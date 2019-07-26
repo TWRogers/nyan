@@ -1,2 +1,4 @@
-from .collection import Collection
-from.collection import COLOUR_MODES
+from .images import Images
+from .images import COLOUR_MODES
+
+__all__ = ["Images", "COLOUR_MODES"]

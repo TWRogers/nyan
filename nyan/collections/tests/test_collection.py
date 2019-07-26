@@ -65,6 +65,20 @@ def test_collection_as_array(debug_mode, channel_mode):
     assert np.all(collection.as_array() == array)
 
 
+@pytest.mark.parametrize('debug_mode', [True, False])
+@pytest.mark.parametrize('channel_mode', ['RGB', 'BGR', None])
+def test_collection_copy(debug_mode, channel_mode):
+    if channel_mode is None:
+        array = np.zeros((10, 100, 100, 1))
+    elif channel_mode in COLOUR_MODES:
+        array = np.zeros((10, 100, 100, 3))
+    else:
+        raise ValueError
+
+    collection = Collection.from_array(array, channel_mode=channel_mode, debug_mode=debug_mode)
+    collection_copy = collection.copy()
+    assert collection_copy == collection
+
 # @pytest.mark.parametrize('debug_mode', [True, False])
 # @pytest.mark.parametrize('channel_mode', ['RGB', 'BGR', None])
 # def test_collection_array_interface(debug_mode, channel_mode):
