@@ -1,6 +1,7 @@
 import typing
 import numpy as np
 from nyan import History
+import cv2
 
 
 COLOUR_MODES = ('RGB', 'BGR')
@@ -108,9 +109,10 @@ class Images(object):
         return self.__dict__ == other.__dict__
 
     def __repr__(self) -> str:
-        return "<{module}.{name} images channel_mode={channel_mode} size={size} at 0x{id}>".format(
+        return "<{module}.{name} {n_images} images channel_mode={channel_mode} size={size} at 0x{id}>".format(
             module=self.__class__.__module__,
             name=self.__class__.__name__,
+            n_images=len(self),
             channel_mode=self.channel_mode,
             size=self.size,
             id=id(self))
@@ -124,18 +126,9 @@ class Images(object):
         new_copy.images = self.images.copy()
         new_copy._original_images = self._original_images.copy()
         new_copy._transform_history = self._transform_history.copy()
-        new_copy.debug_history = self.debug_history.copy()
+        new_copy._debug_history = self._debug_history.copy()
 
         return new_copy
-
-    def __add_to_transform_history(self,
-                                   crop: typing.Optional[tuple] = None,
-                                   resize: typing.Optional[tuple] = None,
-                                   pad: typing.Optional[tuple] = None):
-
-        self._transform_history.update({"crop": crop,
-                                        "resize": resize,
-                                        "pad": pad})
 
     def transform_image(self, start_event, end_event) -> np.ndarray:
         raise NotImplementedError
@@ -150,8 +143,8 @@ class Images(object):
         raise NotImplementedError
 
     @History.transform()
-    def _rotate(self):
-        raise NotImplementedError
+    def rotate(self, angle):
+        self.images = [cv2.rotate(image, angle) for image in self.images]
 
     @History.transform()
     def _translate(self):
@@ -162,23 +155,51 @@ class Images(object):
 
     @History.transform()
     def _crop(self, x_min: int, x_max: int, y_min: int, y_max: int) -> None:
-        self.images = [self.images[y_min:y_max, x_min:x_max]]
+        self.images = [image[y_min:y_max, x_min:x_max] for image in self.images]
 
     def resize(self,
                target_size: tuple,
                preserve_aspect_ratio: bool = False) -> None:
-        raise NotImplementedError
+
+        if (target_size[0] is None) and (target_size[1] is None):
+            resize = self.size
+        elif target_size[0] is None:
+            resize = target_size
+            if preserve_aspect_ratio:
+                resize[0] = round(self.size[0] * (target_size[1] / self.size[1]))
+            else:
+                resize[0] = self.size[0]
+        elif target_size[1] is None:
+            resize = target_size
+            if preserve_aspect_ratio:
+                resize[1] = round(self.size[1] * (target_size[0] / self.size[0]))
+            else:
+                resize[1] = self.size[1]
+        else:
+            resize = target_size
+
+        self._resize(size=resize)
 
     @History.transform()
-    def _resize(self) -> None:
-        raise NotImplementedError
+    def _resize(self, size: tuple) -> None:
+        self.images = [cv2.resize(image, size) for image in self.images]
 
-    def pad(self, padding_params) -> None:
-        raise NotImplementedError
+    def pad(self,
+            top: typing.Optional[int] = None,
+            bottom: typing.Optional[int] = None,
+            left: typing.Optional[int] = None,
+            right: typing.Optional[int] = None,
+            colour: typing.Optional[tuple] = None) -> None:
+
+        padding = [x if x is not None else 0 for x in (top, bottom, left, right)]
+        if colour is None:
+            colour = (0, 0, 0)
+        self._pad(*padding, colour)
 
     @History.transform()
-    def _pad(self):
-        raise NotImplementedError
+    def _pad(self, top, bottom, left, right, colour):
+        self.images = [cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=colour)
+                       for image in self.images]
 
     def label_event(self) -> None:
         raise NotImplementedError
