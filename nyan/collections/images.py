@@ -23,6 +23,12 @@ class Images(object):
         self._transform_history = []
         self._debug_history = []
 
+    def load(self):
+        raise NotImplementedError
+
+    def save(self):
+        raise NotImplementedError
+
     @classmethod
     def from_array(cls,
                    array: np.ndarray,
@@ -130,28 +136,47 @@ class Images(object):
 
         return new_copy
 
-    def transform_image(self, start_event, end_event) -> np.ndarray:
+    def transform_image(self, image, start_event, end_event) -> np.ndarray:
         raise NotImplementedError
 
-    def transform_point(self, start_event, end_event) -> tuple:
+    def transform_point(self, point, start_event, end_event) -> tuple:
         raise NotImplementedError
 
-    def transform_box(self, start_event, end_event) -> tuple:
+    def transform_box(self, box, start_event, end_event) -> tuple:
         raise NotImplementedError
 
     def transform_polygon(self, vertices, start_event, end_event) -> list:
         raise NotImplementedError
 
     @History.transform()
-    def rotate(self, angle):
+    def rotate(self, angle: float):
         self.images = [cv2.rotate(image, angle) for image in self.images]
 
-    @History.transform()
-    def _translate(self):
-        raise NotImplementedError
+    def translate(self, x: int = 0, y: int = 0, pad_colour: typing.Optional[tuple] = None):
 
-    def crop(self, cropping_params: dict) -> None:
-        raise NotImplementedError
+        self.pad(bottom=y if y > 0 else 0,
+                 top=-y if y < 0 else 0,
+                 left=x if x > 0 else 0,
+                 right=-x if x < 0 else 0,
+                 colour=pad_colour)
+
+        self._crop(x_min=0 if x > 0 else -x,
+                   x_max=self.size[0]-x if x > 0 else self.size[0],
+                   y_min=0 if y > 0 else -y,
+                   y_max=self.size[1] - y if y > 0 else self.size[1])
+
+    def crop(self,
+             x_min: typing.Optional[int] = None,
+             x_max: typing.Optional[int] = None,
+             y_min: typing.Optional[int] = None,
+             y_max: typing.Optional[int] = None):
+
+        x_min = 0 if x_min is None else x_min
+        y_min = 0 if y_min is None else y_min
+        x_max = self.size[0] if x_max is None else x_max
+        y_max = self.size[1] if y_max is None else y_max
+
+        self._crop(x_min, x_max, y_min, y_max)
 
     @History.transform()
     def _crop(self, x_min: int, x_max: int, y_min: int, y_max: int) -> None:
@@ -201,8 +226,8 @@ class Images(object):
         self.images = [cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=colour)
                        for image in self.images]
 
-    def label_event(self) -> None:
-        raise NotImplementedError
+    def label_event(self, label: str) -> None:
+        self._transform_history[-1].update({'label': label})
 
     @property
     def __array_interface__(self) -> dict:

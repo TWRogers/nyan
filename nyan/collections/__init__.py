@@ -1,4 +1,5 @@
-from .images import Images
-from .images import COLOUR_MODES
+from .images import Images, COLOUR_MODES
+from .video import Video
 
-__all__ = ["Images", "COLOUR_MODES"]
+
+__all__ = ["Images", "COLOUR_MODES", "Video"]
