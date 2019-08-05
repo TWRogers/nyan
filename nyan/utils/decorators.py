@@ -19,7 +19,8 @@ class History(object):
             if _type == 'debug':
                 raise NotImplementedError
             elif _type == 'transform':
-                args[0]._transform_history.append({f_name: {'args': args[1:], 'kwargs': kwargs},
+                args[0]._transform_history.append({'fn_args': {'args': args[1:], 'kwargs': kwargs},
+                                                   'fn_name': f_name,
                                                    'size': args[0].size,
                                                    'label': None})
             return f(*args, **kwargs)

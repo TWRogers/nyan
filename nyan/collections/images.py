@@ -136,8 +136,16 @@ class Images(object):
 
         return new_copy
 
-    def transform_image(self, image, start_event, end_event) -> np.ndarray:
+    def _get_transform_config(self) -> list:
+        return [{event['fn_name']: event['fn_args']} for event in self._transform_history]
+
+    def transform_image(self, image, start_event: str = 'start', end_event: str = 'end') -> np.ndarray:
+        relevant_transform_history, direction = self._get_relevant_history(start_event, end_event)
         raise NotImplementedError
+        #
+        # if direction:
+        #     for event in relevant_transform_history:
+        #         if event['fn_name'] == '':
 
     def transform_point(self, point, start_event, end_event) -> tuple:
         raise NotImplementedError
@@ -147,6 +155,23 @@ class Images(object):
 
     def transform_polygon(self, vertices, start_event, end_event) -> list:
         raise NotImplementedError
+
+    def _get_relevant_history(self, start_event: str = 'start', end_event: str = 'end'):
+        start_idx = self._get_event_index(start_event)
+        end_idx = self._get_event_index(end_event)
+        if start_idx < end_idx:
+            return self._transform_history[start_idx:end_idx], True
+        else:
+            return self._transform_history[end_idx:end_idx], False
+
+    def _get_event_index(self, event_name: str) -> int:
+        if event_name not in ('start', 'end'):
+            event_names = [e.get('label') for e in self._transform_history]
+            return event_names.index(event_name)
+        elif event_name == 'start':
+            return 0
+        elif event_name == 'end':
+            return len(self._transform_history)
 
     @History.transform()
     def rotate(self, angle: float):
@@ -171,43 +196,51 @@ class Images(object):
              y_min: typing.Optional[int] = None,
              y_max: typing.Optional[int] = None):
 
-        x_min = 0 if x_min is None else x_min
-        y_min = 0 if y_min is None else y_min
-        x_max = self.size[0] if x_max is None else x_max
-        y_max = self.size[1] if y_max is None else y_max
+        left = 0 if x_min is None else x_min
+        top = 0 if y_min is None else y_min
+        right = 0 if x_max is None else self.size[0]-x_max
+        bottom = 0 if y_max is None else self.size[1]-y_max
 
-        self._crop(x_min, x_max, y_min, y_max)
+        self._crop(left, right, top, bottom)
 
     @History.transform()
-    def _crop(self, x_min: int, x_max: int, y_min: int, y_max: int) -> None:
-        self.images = [image[y_min:y_max, x_min:x_max] for image in self.images]
+    def _crop(self, left: int, right: int, top: int, bottom: int) -> None:
+        self.images = [image[left:-right, top:-bottom] for image in self.images]
+
+    def _crop_inverse(self):
+        return self._pad
 
     def resize(self,
                target_size: tuple,
                preserve_aspect_ratio: bool = False) -> None:
 
         if (target_size[0] is None) and (target_size[1] is None):
-            resize = self.size
+            fx = 1.
+            fy = 1.
         elif target_size[0] is None:
-            resize = target_size
+            fy = target_size[1] / self.size[1]
             if preserve_aspect_ratio:
-                resize[0] = round(self.size[0] * (target_size[1] / self.size[1]))
+                fx = fy
             else:
-                resize[0] = self.size[0]
+                fx = 1.
         elif target_size[1] is None:
-            resize = target_size
+            fx = target_size[0] / self.size[0]
             if preserve_aspect_ratio:
-                resize[1] = round(self.size[1] * (target_size[0] / self.size[0]))
+                fy = fx
             else:
-                resize[1] = self.size[1]
+                fy = 1.
         else:
-            resize = target_size
+            fx = target_size[0] / self.size[0]
+            fy = target_size[1] / self.size[1]
 
-        self._resize(size=resize)
+        self._resize(fx=fx, fy=fy)
 
     @History.transform()
-    def _resize(self, size: tuple) -> None:
-        self.images = [cv2.resize(image, size) for image in self.images]
+    def _resize(self, fx: float, fy: float) -> None:
+        self.images = [cv2.resize(image, fx=fx, fy=fy) for image in self.images]
+
+    def _resize_inverse(self, fx: float, fy: float) -> None:
+        self._resize(fx=1./fx, fy=1./fy)
 
     def pad(self,
             top: typing.Optional[int] = None,
@@ -225,6 +258,9 @@ class Images(object):
     def _pad(self, top, bottom, left, right, colour):
         self.images = [cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=colour)
                        for image in self.images]
+
+    def _pad_inverse(self):
+        return self._crop
 
     def label_event(self, label: str) -> None:
         self._transform_history[-1].update({'label': label})
