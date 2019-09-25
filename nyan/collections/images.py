@@ -3,6 +3,7 @@ import numpy as np
 from nyan.utils import History
 import cv2
 import matplotlib.pyplot as plt
+import math
 
 COLOUR_MODES = ('RGB', 'BGR')
 
@@ -86,20 +87,15 @@ class Images(object):
             return None
 
     def __getitem__(self, key):
+        new_obj = self.copy()
         if isinstance(key, slice):
-            if key.step is None:
-                step = 1
-            else:
-                step = key.step
-            return [self.images[i] for i in range(key.start, key.stop, step)]
+            new_obj.images = [self.images[i] for i in range(key.start, key.stop, key.step if key.step else 1)]
+            return new_obj
 
         elif isinstance(key, tuple):
             if isinstance(key[0], slice):
-                if key[0].step is None:
-                    step = 1
-                else:
-                    step = key[0].step
-                return [self.images[i][key[1:]] for i in range(key[0].start, key[0].stop, step)]
+                return [self.images[i][key[1:]] for i in
+                        range(key[0].start, key[0].stop, key[0].step if key[0].step else 1)]
             else:
                 return [self.images[key[0]][key[1:]]]
 
@@ -156,14 +152,34 @@ class Images(object):
                                               'for {} is not Implemented'.format(event['fn_name'], event['fn_name']))
         return image
 
-    def transform_point(self, point, start_event, end_event) -> tuple:
-        raise NotImplementedError
+    def transform_point(self, point, start_event: str = 'start', end_event: str = 'end') -> tuple:
+        relevant_transform_history, direction = self._get_relevant_history(start_event, end_event)
 
-    def transform_box(self, box, start_event, end_event) -> tuple:
-        raise NotImplementedError
+        if direction:
+            for event in relevant_transform_history:
+                fn_name = '{}_point'.format(event['fn_name'])
+                try:
+                    point = getattr(self, fn_name)(point, *event['fn_args']['args'], **event['fn_args']['kwargs'])
+                except AttributeError:
+                    raise NotImplementedError('The fn ({})'.format(fn_name))
+        else:
+            for event in relevant_transform_history[::-1]:
+                try:
+                    fn_name = '{}_point_inverse'.format(event['fn_name'])
+                    point = getattr(self, fn_name)(point, *event['fn_args']['args'], **event['fn_args']['kwargs'])
 
-    def transform_polygon(self, vertices, start_event, end_event) -> list:
-        raise NotImplementedError
+                except AttributeError:
+                    raise NotImplementedError('The fn inverse ({})'.format(fn_name))
+
+        return point
+
+    def transform_box(self, box: tuple, start_event: str = 'start', end_event: str = 'end') -> tuple:
+        max_point = self.transform_point((box[1], box[3]), start_event, end_event)
+        min_point = self.transform_point((box[0], box[2]), start_event, end_event)
+        return min_point[0], max_point[0], min_point[1], max_point[1]
+
+    def transform_polygon(self, vertices: list, start_event: str = 'start', end_event: str = 'end') -> list:
+        return [self.transform_point(point, start_event, end_event) for point in vertices]
 
     def _get_relevant_history(self, start_event: str = 'start', end_event: str = 'end'):
         start_idx = self._get_event_index(start_event)
@@ -188,6 +204,14 @@ class Images(object):
 
     def _rotate_inverse(self, angle: float):
         self.images = [cv2.rotate(image, -angle) for image in self.images]
+
+    def _rotate_point(self, point: tuple, angle: float):
+        theta = math.radians(angle)
+        x, y = point
+        return x * math.cos(theta) - y * math.sin(theta), y * math.cos(theta) - x * math.sin(theta)
+
+    def _rotate_point_inverse(self, point: tuple, angle: float):
+        return self._rotate_point(point, -angle)
 
     def translate(self, x: int = 0, y: int = 0, pad_colour: typing.Optional[tuple] = None):
 
@@ -222,6 +246,12 @@ class Images(object):
     def _crop_inverse(self, top: int, bottom: int, left: int, right: int) -> None:
         return self._pad(top, bottom, left, right, colour=(0, 0, 0))
 
+    def _crop_point(self, point: tuple, top: int, bottom: int, left: int, right: int) -> tuple:
+        return point[0]-left, point[1]-top
+
+    def _crop_point_inverse(self, point: tuple, top: int, bottom: int, left: int, right: int) -> tuple:
+        return self._pad_point(point, top, bottom, left, right)
+
     def resize(self,
                target_size: tuple,
                preserve_aspect_ratio: bool = False) -> None:
@@ -254,6 +284,12 @@ class Images(object):
     def _resize_inverse(self, fx: float, fy: float) -> None:
         self._resize(fx=1./fx, fy=1./fy)
 
+    def _resize_point(self, point: tuple, fx: float, fy: float) -> tuple:
+        return point[0]*fx, point[1]*fy
+
+    def _resize_point_inverse(self, point: tuple, fx: float, fy: float) -> tuple:
+        return self._resize_point(point, fx=1./fx, fy=1./fy)
+
     def pad(self,
             top: typing.Optional[int] = None,
             bottom: typing.Optional[int] = None,
@@ -273,6 +309,12 @@ class Images(object):
 
     def _pad_inverse(self, top, bottom, left, right, colour):
         return self._crop(top, bottom, left, right)
+
+    def _pad_point(self, point, top, bottom, left, right, colour):
+        return point[0] + left, point[1] + top
+
+    def _pad_point_inverse(self, point, top, bottom, left, right, colour):
+        return self._crop_point(point, top, bottom, left, right)
 
     def label_event(self, label: str) -> None:
         self._transform_history[-1].update({'label': label})
