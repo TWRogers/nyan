@@ -27,9 +27,10 @@ setup(name='nyan',
       install_requires=[
           'Pillow',
           'numpy',
-          'Pillow',
           'imageio',
           'opencv-python',
+          'imageio-ffmpeg',
+          'matplotlib'
       ],
       tests_require=[
           'pytest',
