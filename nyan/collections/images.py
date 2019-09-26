@@ -324,9 +324,4 @@ class Images(object):
 
     @property
     def __array_interface__(self) -> dict:
-        array = self.as_array()
-        return {"typestr": array.dtype.str,
-                "descr": array.dtype.descr,
-                "shape": array.shape,
-                "version": 3,
-                "data": array.tobytes()}
+        return self.as_array().__array_interface__
