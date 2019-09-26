@@ -1,5 +1,5 @@
 from .images import Images
-import imageio
+from nyan.utils import IMREAD_FN
 import typing
 import numpy as np
 
@@ -7,19 +7,14 @@ import numpy as np
 class Image(Images):
 
     def __init__(self,
-                 filepath: typing.Optional[str] = None,
-                 channel_mode: tuple = ('R', 'G', 'B'),
+                 src: str,
                  debug_mode: bool = False) -> None:
 
-        super(Image, self).__init__(images=None,
-                                    channel_mode=channel_mode,
+        super(Image, self).__init__(src=src,
                                     debug_mode=debug_mode)
-        self.load(filepath)
 
-    def load(self, filepath: typing.Optional[str] = None) -> None:
-        if filepath is not None:
-            reader = imageio.get_reader(filepath, 'ffmpeg')
-            self.images = [image for image in reader]
+    def _load(self, fp: str) -> None:
+        self.images = [IMREAD_FN(fp)]
 
     @property
     def image(self):
@@ -27,9 +22,6 @@ class Image(Images):
 
     def as_array(self) -> np.ndarray:
         return super(Image, self).as_array()[0, ...]
-
-    def load(self):
-        raise NotImplementedError
 
     def save(self):
         raise NotImplementedError

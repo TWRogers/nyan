@@ -8,9 +8,9 @@ IMAGE_BE = os.environ.get('NYAN_IMAGE_BE', 'PIL')
 
 if IMAGE_BE == 'PIL':
     def IMREAD_FN(x):
-        return np.array(Image.open(x).convert('RGB')).astype(np.uint8)[:, :, ::-1]
+        return np.array(Image.open(x).convert('RGB')).astype(np.uint8)
 elif IMAGE_BE == 'cv2':
     def IMREAD_FN(x):
-        return cv2.imread(x).astype(np.uint8)
+        return cv2.imread(x).astype(np.uint8)[:, :, ::-1]
 else:
     raise NotImplementedError('IMAGE_BE {} not implemented'.format(IMAGE_BE))

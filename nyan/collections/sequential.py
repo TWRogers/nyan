@@ -1,23 +1,20 @@
 from nyan.utils import IMREAD_FN
 from .images import Images
 import glob
-import typing
 
 
 class Sequential(Images):
 
     def __init__(self,
-                 wildcard: str,
-                 channel_mode: tuple = ('R', 'G', 'B'),
+                 directory_wildcard: str,
                  debug_mode: bool = False) -> None:
 
-        super(Sequential, self).__init__(images=None,
-                                         channel_mode=channel_mode,
+        super(Sequential, self).__init__(src=directory_wildcard,
                                          debug_mode=debug_mode)
-        self.load(wildcard)
+        self.load(directory_wildcard)
 
-    def load(self, wildcard: typing.Optional[str] = None) -> None:
-        self.images = [IMREAD_FN(file_path) for file_path in glob.glob(wildcard)]
+    def _load(self, fp: str) -> None:
+        self.images = [IMREAD_FN(file_path) for file_path in glob.glob(fp)]
 
     def save(self):
         raise NotImplementedError

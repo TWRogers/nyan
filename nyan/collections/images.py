@@ -26,30 +26,41 @@ COLOUR_MODES = [('R', 'G', 'B'),
 class Images(object):
 
     def __init__(self,
-                 images: typing.Optional[list] = None,
-                 channel_mode: tuple = ('R', 'G', 'B'),
+                 src,
                  debug_mode: bool = False) -> None:
-        assert channel_mode in COLOUR_MODES
-        self.channel_mode = channel_mode
-        self.debug_mode = debug_mode
 
-        self.images = [] if images is None else images
-        self._original_size = self.size
+        self.debug_mode = debug_mode
+        self.channel_mode = None
+        self.images = []
+        self._original_size = None
 
         self._transform_history = []
         self._debug_history = []
+        if src is not None:
+            self.load(src)
+
+    def _load(self, src: str):
+        raise NotImplementedError
+
+    def load(self, src: str):
+        self._load(src)
+        self.channel_mode = ('R', 'G', 'B')
+        self._original_size = self.size
+
+    def save(self):
+        raise NotImplementedError
 
     def get_relative_coords(self, normalise=False):
         top_right = self.size
         bottom_left = (0, 0)
-        relative_top_right = self.transform_point(top_right, 'end', 'start')
-        relative_bottom_left = self.transform_point(bottom_left, 'end', 'start')
+        relative_top_right = list(self.transform_point(top_right, 'end', 'start'))
+        relative_bottom_left = list(self.transform_point(bottom_left, 'end', 'start'))
         if normalise:
-            relative_top_right[0] /= top_right[0]
-            relative_top_right[1] /= top_right[1]
-            relative_bottom_left[0] /= top_right[0]
-            relative_bottom_left[1] /= top_right[1]
-        return relative_bottom_left, relative_top_right
+            relative_top_right[0] /= self._original_size[0]
+            relative_top_right[1] /= self._original_size[1]
+            relative_bottom_left[0] /= self._original_size[0]
+            relative_bottom_left[1] /= self._original_size[1]
+        return tuple(relative_bottom_left), tuple(relative_top_right)
 
     def convert_color(self, channel_mode: tuple):
         assert channel_mode in COLOUR_MODES, '{} not a valid colour mode.\n' \
@@ -68,43 +79,34 @@ class Images(object):
         channel_index = self.channel_mode.index(channel)
         self.images = [_repeat_c_channels(image[..., channel_index]) for image in self.images]
 
-    def load(self):
-        raise NotImplementedError
-
-    def save(self):
-        raise NotImplementedError
-
     @classmethod
     def from_array(cls,
                    array: np.ndarray,
-                   channel_mode: typing.Optional[tuple] = ('R', 'G', 'B'),
+                   channel_mode: tuple = ('R', 'G', 'B'),
                    debug_mode: bool = False):
 
+        obj = cls(src=None, debug_mode=debug_mode)
         if array.ndim == 4:
-            return cls(images=[_repeat_c_channels(x) for x in array],
-                       channel_mode=channel_mode,
-                       debug_mode=debug_mode)
+            images = [_repeat_c_channels(x) for x in array]
 
         elif array.ndim == 3:
             if array.shape[2] == 1:
                 assert channel_mode == ('GRAY',), "channel_mode must be ('GRAY',) " \
                                                   "if array.ndim == 3 and array.shape[2] == 1"
 
-                return cls(images=[_repeat_c_channels(array)],
-                           channel_mode=channel_mode,
-                           debug_mode=debug_mode)
+                images = [_repeat_c_channels(array)]
             elif array.shape[2] == 3:
                 assert channel_mode in COLOUR_MODES, \
                     'channel_mode must be in {} if array.ndim == 3 and array.shape[2] == 3'.format(COLOUR_MODES)
-                return cls(images=[array],
-                           channel_mode=channel_mode,
-                           debug_mode=debug_mode)
+                images = [array]
 
         elif array.ndim == 2:
             assert channel_mode == ('GRAY',), "channel_mode must be ('GRAY',) if array.ndim == 2"
-            return cls(images=[_repeat_c_channels(array)],
-                       channel_mode=channel_mode,
-                       debug_mode=debug_mode)
+            images = [_repeat_c_channels(array)]
+
+        obj.images = images
+        obj._original_size = obj.size
+        obj.channel_mode = channel_mode
 
     def as_array(self) -> np.ndarray:
         assert self.size is not None, 'All images must have same size to convert to numpy array.'
