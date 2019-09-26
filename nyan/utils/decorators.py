@@ -17,12 +17,20 @@ class History(object):
 
         def required_f(*args, **kwargs):
             if _type == 'debug':
-                raise NotImplementedError
+                if args[0].debug_mode:
+                    result = f(*args, **kwargs)
+                    args[0]._debug_history.append({'fn_args': {'args': args[1:], 'kwargs': kwargs},
+                                                   'fn_name': f_name,
+                                                   'size': args[0].size,
+                                                   'images': [image.copy() for image in args[0].images],
+                                                   'label': None,
+                                                   'channel_mode': args[0].channel_mode})
+                    return result
             elif _type == 'transform':
                 args[0]._transform_history.append({'fn_args': {'args': args[1:], 'kwargs': kwargs},
                                                    'fn_name': f_name,
                                                    'size': args[0].size,
                                                    'label': None})
-            return f(*args, **kwargs)
+                return f(*args, **kwargs)
 
         return required_f
