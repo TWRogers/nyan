@@ -4,9 +4,7 @@ import glob
 
 
 class Sequential(Images):
-
-    def __init__(self,
-                 directory_wildcard: str,
+    def __init__(self, directory_wildcard: str,
                  debug_mode: bool = False) -> None:
 
         super(Sequential, self).__init__(src=directory_wildcard,

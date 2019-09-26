@@ -4,13 +4,9 @@ import typing
 
 
 class Video(Images):
+    def __init__(self, fp: str = None, debug_mode: bool = False) -> None:
 
-    def __init__(self,
-                 fp: str = None,
-                 debug_mode: bool = False) -> None:
-
-        super(Video, self).__init__(src=fp,
-                                    debug_mode=debug_mode)
+        super(Video, self).__init__(src=fp, debug_mode=debug_mode)
 
     def _load(self, fp: str) -> None:
         if fp is not None:

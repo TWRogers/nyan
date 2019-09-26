@@ -1,17 +1,12 @@
 from .images import Images
 from nyan.utils import IMREAD_FN
-import typing
 import numpy as np
 
 
 class Image(Images):
+    def __init__(self, src: str, debug_mode: bool = False) -> None:
 
-    def __init__(self,
-                 src: str,
-                 debug_mode: bool = False) -> None:
-
-        super(Image, self).__init__(src=src,
-                                    debug_mode=debug_mode)
+        super(Image, self).__init__(src=src, debug_mode=debug_mode)
 
     def _load(self, fp: str) -> None:
         self.images = [IMREAD_FN(fp)]
