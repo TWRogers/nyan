@@ -3,7 +3,13 @@ import numpy as np
 from nyan.utils import History
 import cv2
 import matplotlib.pyplot as plt
-import math
+
+
+try:
+    import scipy
+    from scipy import ndimage
+except ImportError:
+    scipy = None
 
 COLOUR_MODES = ('RGB', 'BGR')
 
@@ -61,7 +67,7 @@ class Images(object):
                        debug_mode=debug_mode)
 
     def as_array(self) -> np.ndarray:
-        assert self.size is not None, 'All images must have same size to export as array.'
+        assert self.size is not None, 'All images must have same size to convert to numpy array.'
         return np.array(self.images)
 
     @property
@@ -86,39 +92,6 @@ class Images(object):
         else:
             return None
 
-    def __getitem__(self, key):
-        new_obj = self.copy()
-        if isinstance(key, slice):
-            new_obj.images = [self.images[i] for i in range(key.start, key.stop, key.step if key.step else 1)]
-            return new_obj
-
-        elif isinstance(key, tuple):
-            if isinstance(key[0], slice):
-                return [self.images[i][key[1:]] for i in
-                        range(key[0].start, key[0].stop, key[0].step if key[0].step else 1)]
-            else:
-                return [self.images[key[0]][key[1:]]]
-
-        return self.images[key]
-
-    def __iter__(self) -> iter:
-        return iter(self.images)
-
-    def __len__(self) -> int:
-        return len(self.images)
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-    def __repr__(self) -> str:
-        return "<{module}.{name} {n_images} images channel_mode={channel_mode} size={size} at 0x{id}>".format(
-            module=self.__class__.__module__,
-            name=self.__class__.__name__,
-            n_images=len(self),
-            channel_mode=self.channel_mode,
-            size=self.size,
-            id=id(self))
-
     def copy(self):
 
         new_copy = self.__class__()
@@ -131,9 +104,6 @@ class Images(object):
         new_copy._debug_history = self._debug_history.copy()
 
         return new_copy
-
-    def _get_transform_config(self) -> list:
-        return [{event['fn_name']: event['fn_args']} for event in self._transform_history]
 
     def transform_image(self, image, start_event: str = 'start', end_event: str = 'end') -> np.ndarray:
         relevant_transform_history, direction = self._get_relevant_history(start_event, end_event)
@@ -181,50 +151,24 @@ class Images(object):
     def transform_polygon(self, vertices: list, start_event: str = 'start', end_event: str = 'end') -> list:
         return [self.transform_point(point, start_event, end_event) for point in vertices]
 
-    def _get_relevant_history(self, start_event: str = 'start', end_event: str = 'end'):
-        start_idx = self._get_event_index(start_event)
-        end_idx = self._get_event_index(end_event)
-        if start_idx < end_idx:
-            return self._transform_history[start_idx:end_idx], True
-        else:
-            return self._transform_history[end_idx:start_idx], False
+    def shear(self, shear_intensity: float, fill_mode: str = 'constant',
+              c_val: float = 0., interpolation_order: int = 1) -> None:
+        self._affine_transform(shear=shear_intensity, fill_mode=fill_mode, c_val=c_val, order=interpolation_order)
 
-    def _get_event_index(self, event_name: str) -> int:
-        if event_name not in ('start', 'end'):
-            event_names = [e.get('label') for e in self._transform_history]
-            return event_names.index(event_name)
-        elif event_name == 'start':
-            return 0
-        elif event_name == 'end':
-            return len(self._transform_history)
+    def zoom(self, zoom_range: tuple, fill_mode: str = 'constant', c_val: float = 0.,
+             interpolation_order: int = 1) -> None:
+        zx, zy = zoom_range
+        self._affine_transform(zx=zx, zy=zy, fill_mode=fill_mode, c_val=c_val, order=interpolation_order)
 
-    @History.transform()
-    def _rotate(self, angle: float):
-        self.images = [cv2.rotate(image, angle) for image in self.images]
+    def rotate(self, theta: float, fill_mode: str = 'constant', c_val: float = 0.,
+               interpolation_order: int = 1) -> None:
+        self._affine_transform(theta=theta, fill_mode=fill_mode, c_val=c_val, order=interpolation_order)
 
-    def _rotate_inverse(self, angle: float):
-        self.images = [cv2.rotate(image, -angle) for image in self.images]
-
-    def _rotate_point(self, point: tuple, angle: float):
-        theta = math.radians(angle)
-        x, y = point
-        return x * math.cos(theta) - y * math.sin(theta), y * math.cos(theta) - x * math.sin(theta)
-
-    def _rotate_point_inverse(self, point: tuple, angle: float):
-        return self._rotate_point(point, -angle)
-
-    def translate(self, x: int = 0, y: int = 0, pad_colour: typing.Optional[tuple] = None):
-
-        self.pad(bottom=y if y > 0 else 0,
-                 top=-y if y < 0 else 0,
-                 left=x if x > 0 else 0,
-                 right=-x if x < 0 else 0,
-                 colour=pad_colour)
-
-        self._crop(x_min=0 if x > 0 else -x,
-                   x_max=self.size[0]-x if x > 0 else self.size[0],
-                   y_min=0 if y > 0 else -y,
-                   y_max=self.size[1] - y if y > 0 else self.size[1])
+    def translate(self, x: int = 0, y: int = 0, fill_mode: str = 'constant', c_val: float = 0.,
+                  interpolation_order: int = 1):
+        self._affine_transform(tx=x, ty=y,
+                               fill_mode=fill_mode, c_val=c_val,
+                               order=interpolation_order)
 
     def crop(self,
              y_min: typing.Optional[int] = None,
@@ -238,19 +182,6 @@ class Images(object):
         bottom = 0 if y_max is None else self.size[1]-y_max
 
         self._crop(top, bottom, left, right)
-
-    @History.transform()
-    def _crop(self, top: int, bottom: int, left: int, right: int) -> None:
-        self.images = [image[top:-bottom, left:-right] for image in self.images]
-
-    def _crop_inverse(self, top: int, bottom: int, left: int, right: int) -> None:
-        return self._pad(top, bottom, left, right, colour=(0, 0, 0))
-
-    def _crop_point(self, point: tuple, top: int, bottom: int, left: int, right: int) -> tuple:
-        return point[0]-left, point[1]-top
-
-    def _crop_point_inverse(self, point: tuple, top: int, bottom: int, left: int, right: int) -> tuple:
-        return self._pad_point(point, top, bottom, left, right)
 
     def resize(self,
                target_size: tuple,
@@ -276,19 +207,6 @@ class Images(object):
 
         self._resize(fx=fx, fy=fy)
 
-    @History.transform()
-    def _resize(self, fx: float, fy: float) -> None:
-        self.images = [cv2.resize(image, dsize=None, fx=fx, fy=fy) for image in self.images]
-
-    def _resize_inverse(self, fx: float, fy: float) -> None:
-        self._resize(fx=1./fx, fy=1./fy)
-
-    def _resize_point(self, point: tuple, fx: float, fy: float) -> tuple:
-        return point[0]*fx, point[1]*fy
-
-    def _resize_point_inverse(self, point: tuple, fx: float, fy: float) -> tuple:
-        return self._resize_point(point, fx=1./fx, fy=1./fy)
-
     def pad(self,
             top: typing.Optional[int] = None,
             bottom: typing.Optional[int] = None,
@@ -299,7 +217,51 @@ class Images(object):
         padding = [x if x is not None else 0 for x in (top, bottom, left, right)]
         if colour is None:
             colour = (0, 0, 0)
+        elif type(colour) != tuple:
+            colour = 3*(colour,)
         self._pad(*padding, colour)
+
+    def label_event(self, label: str) -> None:
+        self._transform_history[-1].update({'label': label})
+
+    def show(self, index: int = 0):
+        plt.imshow(self.images[index])
+        plt.show()
+
+    def _get_relevant_history(self, start_event: str = 'start', end_event: str = 'end'):
+        start_idx = self._get_event_index(start_event)
+        end_idx = self._get_event_index(end_event)
+        if start_idx < end_idx:
+            return self._transform_history[start_idx:end_idx], True
+        else:
+            return self._transform_history[end_idx:start_idx], False
+
+    def _get_event_index(self, event_name: str) -> int:
+        if event_name not in ('start', 'end'):
+            event_names = [e.get('label') for e in self._transform_history]
+            return event_names.index(event_name)
+        elif event_name == 'start':
+            return 0
+        elif event_name == 'end':
+            return len(self._transform_history)
+
+    @property
+    def __array_interface__(self) -> dict:
+        return self.as_array().__array_interface__
+
+    @History.transform()
+    def _crop(self, top: int, bottom: int, left: int, right: int) -> None:
+        w, h = self.size
+        self.images = [image[top:h-bottom, left:w-right] for image in self.images]
+
+    def _crop_inverse(self, top: int, bottom: int, left: int, right: int) -> None:
+        return self._pad(top, bottom, left, right, colour=(0, 0, 0))
+
+    def _crop_point(self, point: tuple, top: int, bottom: int, left: int, right: int) -> tuple:
+        return point[0]-left, point[1]-top
+
+    def _crop_point_inverse(self, point: tuple, top: int, bottom: int, left: int, right: int) -> tuple:
+        return self._pad_point(point, top, bottom, left, right, colour=None)
 
     @History.transform()
     def _pad(self, top, bottom, left, right, colour):
@@ -315,13 +277,215 @@ class Images(object):
     def _pad_point_inverse(self, point, top, bottom, left, right, colour):
         return self._crop_point(point, top, bottom, left, right)
 
-    def label_event(self, label: str) -> None:
-        self._transform_history[-1].update({'label': label})
+    @History.transform()
+    def _resize(self, fx: float, fy: float) -> None:
+        self.images = [cv2.resize(image, dsize=None, fx=fx, fy=fy) for image in self.images]
 
-    def show(self, index: int = 0):
-        plt.imshow(self.images[index])
-        plt.show()
+    def _resize_inverse(self, fx: float, fy: float) -> None:
+        self._resize(fx=1./fx, fy=1./fy)
 
-    @property
-    def __array_interface__(self) -> dict:
-        return self.as_array().__array_interface__
+    def _resize_point(self, point: tuple, fx: float, fy: float) -> tuple:
+        return point[0]*fx, point[1]*fy
+
+    def _resize_point_inverse(self, point: tuple, fx: float, fy: float) -> tuple:
+        return self._resize_point(point, fx=1./fx, fy=1./fy)
+
+    @History.transform()
+    def _affine_transform(self, theta: float = 0, tx: float = 0, ty: float = 0, shear: float = 0,
+                          zx: float = 1, zy: float = 1, fill_mode: str = 'nearest', c_val: float = 0.,
+                          order: int = 1) -> None:
+
+        final_affine_matrix, final_offset = _get_affine_transformation_matrix(self.size, theta, tx, ty, shear, zx, zy)
+
+        self.images = [_apply_affine_transform(image, final_affine_matrix, final_offset, fill_mode, c_val, order)
+                       for image in self.images]
+
+    def _affine_transform_inverse(self, theta: float = 0, tx: float = 0, ty: float = 0, shear: float = 0,
+                                  zx: float = 1, zy: float = 1, fill_mode: str = 'nearest', c_val: float = 0.,
+                                  order: int = 1) -> None:
+        theta = -theta
+        tx = -tx
+        ty = -ty
+        shear = -shear
+        zx = 1./zx
+        zy = 1./zy
+
+        final_affine_matrix, final_offset = _get_affine_transformation_matrix(self.size, theta, tx, ty, shear, zx, zy)
+        self.images = [_apply_affine_transform(image, final_affine_matrix, final_offset, fill_mode, c_val, order)
+                       for image in self.images]
+
+    def _affine_transform_point(self, point, theta: float = 0, tx: float = 0, ty: float = 0, shear: float = 0,
+                                zx: float = 1, zy: float = 1, fill_mode: str = 'nearest',
+                                c_val: float = 0., order: int = 1):
+
+        final_affine_matrix, final_offset = _get_affine_transformation_matrix(self.size, theta, tx, ty, shear,
+                                                                              zx, zy)
+        point_arr = np.array(point)
+        return tuple(np.matmul(final_affine_matrix, point_arr) + final_offset)
+
+    def _affine_transform_point_inverse(self, point, theta: float = 0, tx: float = 0, ty: float = 0, shear: float = 0,
+                                        zx: float = 1, zy: float = 1, fill_mode: str = 'nearest',
+                                        c_val: float = 0., order: int = 1):
+        theta = -theta
+        tx = -tx
+        ty = -ty
+        shear = -shear
+        zx = 1./zx
+        zy = 1./zy
+
+        final_affine_matrix, final_offset = _get_affine_transformation_matrix(self.size, theta, tx, ty, shear, zx, zy)
+        point_arr = np.array(point)
+        return tuple(np.matmul(final_affine_matrix, point_arr) + final_offset)
+
+    def _get_crop_from_slice(self, key):
+        top, bottom, left, right = 0, 0, 0, 0
+        if type(key) == tuple:
+            assert len(key) == 2, 'can only slice along columns, or columns and rows'
+            if type(key[0]) == slice:
+                assert (key[0].step is None) or (key[0].step == 1), 'step must be 1 or None when slicing'
+                top = key[0].start if key[0].start is not None else 0
+                top = self.size[1] + top if top < 0 else top
+                bottom = key[0].stop if key[0].stop is not None else self.size[1]
+                bottom = -bottom if bottom < 0 else self.size[1] - bottom
+            elif key[0] == Ellipsis:
+                pass
+            if type(key[1]) == slice:
+                assert (key[1].step is None) or (key[1].step == 1), 'step must be 1 or None when slicing'
+                left = key[1].start if key[1].start is not None else 0
+                left = self.size[0] + left if left < 0 else left
+                right = key[1].stop if key[1].stop is not None else self.size[0]
+                right = -right if right < 0 else self.size[0] - right
+            elif key[0] == Ellipsis:
+                pass
+        elif key == Ellipsis:
+            pass
+        elif type(key) == slice:
+            assert (key.step is None) or (key.step == 1), 'step must be 1 or None when slicing'
+            top = key.start if key.start is not None else 0
+            top = self.size[1] + top if top < 0 else top
+            bottom = key.stop if key.stop is not None else 0
+            bottom = self.size[1] + bottom if bottom < 0 else bottom
+        return top, bottom, left, right
+
+    def __getitem__(self, key):
+        sliced_object = self.copy()
+        top, bottom, left, right = self._get_crop_from_slice(key)
+        if any((top, bottom, left, right)):
+            sliced_object._crop(top, bottom, left, right)
+        return sliced_object
+
+    def __iter__(self) -> iter:
+        return iter(self.images)
+
+    def __len__(self) -> int:
+        return len(self.images)
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self) -> str:
+        return "<{module}.{name} {n_images} images channel_mode={channel_mode} size={size} at 0x{id}>".format(
+            module=self.__class__.__module__,
+            name=self.__class__.__name__,
+            n_images=len(self),
+            channel_mode=self.channel_mode,
+            size=self.size,
+            id=id(self))
+
+    def _get_transform_config(self) -> list:
+        return [{event['fn_name']: event['fn_args']} for event in self._transform_history]
+
+
+def _transform_matrix_offset_center(matrix: np.ndarray, x: int, y: int) -> np.ndarray:
+    o_x = float(x) / 2 + 0.5
+    o_y = float(y) / 2 + 0.5
+    offset_matrix = np.array([[1, 0, o_x], [0, 1, o_y], [0, 0, 1]])
+    reset_matrix = np.array([[1, 0, -o_x], [0, 1, -o_y], [0, 0, 1]])
+    transform_matrix = np.dot(np.dot(offset_matrix, matrix), reset_matrix)
+    return transform_matrix
+
+
+def _get_affine_transformation_matrix(size: tuple, theta: float = 0, tx: float = 0, ty: float = 0, shear: float = 0,
+                                      zx: float = 1, zy: float = 1) -> tuple:
+    transform_matrix = None
+    if theta != 0:
+        theta = np.deg2rad(theta)
+        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                    [np.sin(theta), np.cos(theta), 0],
+                                    [0, 0, 1]])
+        transform_matrix = rotation_matrix
+
+    if tx != 0 or ty != 0:
+        shift_matrix = np.array([[1, 0, tx],
+                                 [0, 1, ty],
+                                 [0, 0, 1]])
+        if transform_matrix is None:
+            transform_matrix = shift_matrix
+        else:
+            transform_matrix = np.dot(transform_matrix, shift_matrix)
+
+    if shear != 0:
+        shear = np.deg2rad(shear)
+        shear_matrix = np.array([[1, -np.sin(shear), 0],
+                                 [0, np.cos(shear), 0],
+                                 [0, 0, 1]])
+        if transform_matrix is None:
+            transform_matrix = shear_matrix
+        else:
+            transform_matrix = np.dot(transform_matrix, shear_matrix)
+
+    if zx != 1 or zy != 1:
+        zoom_matrix = np.array([[zx, 0, 0],
+                                [0, zy, 0],
+                                [0, 0, 1]])
+        if transform_matrix is None:
+            transform_matrix = zoom_matrix
+        else:
+            transform_matrix = np.dot(transform_matrix, zoom_matrix)
+
+    if transform_matrix is not None:
+        w, h = size
+        transform_matrix = _transform_matrix_offset_center(
+            transform_matrix, h, w)
+        final_affine_matrix = transform_matrix[:2, :2]
+        final_offset = transform_matrix[:2, 2]
+        return final_affine_matrix, final_offset
+    else:
+        return None, None
+
+
+def _apply_affine_transform(x: np.ndarray, final_affine_matrix: np.ndarray, final_offset: np.ndarray,
+                            fill_mode: str = 'nearest', c_val: float = 0., order: int = 1) -> np.ndarray:
+    """Applies an affine transformation specified by the parameters given.
+        Based on https://github.com/keras-team/keras-preprocessing/
+            blob/master/keras_preprocessing/image/affine_transformations.py
+    # Arguments
+        x: 2D numpy array, single image.
+        final_affine_matrix: afine transformation matrix
+
+        fill_mode: Points outside the boundaries of the input
+            are filled according to the given mode
+            (one of `{'constant', 'nearest', 'reflect', 'wrap'}`).
+        c_val: Value used for points outside the boundaries
+            of the input if `mode='constant'`.
+        order: int, order of interpolation
+    # Returns
+        The transformed version of the input.
+    """
+    if scipy is None:
+        raise ImportError('Image transformations require SciPy. '
+                          'Install SciPy.')
+
+    if final_affine_matrix is not None and final_offset is not None:
+        x = np.rollaxis(x, 2, 0)
+
+        channel_images = [ndimage.interpolation.affine_transform(
+            x_channel,
+            final_affine_matrix,
+            final_offset,
+            order=order,
+            mode=fill_mode,
+            cval=c_val) for x_channel in x]
+        x = np.stack(channel_images, axis=0)
+        x = np.rollaxis(x, 0, 2 + 1)
+    return x
