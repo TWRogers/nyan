@@ -42,10 +42,29 @@ class Images(object):
     def _load(self, src: str):
         raise NotImplementedError
 
+    @History.debug()
     def load(self, src: str):
         self._load(src)
         self.channel_mode = ('R', 'G', 'B')
         self._original_size = self.size
+
+    def debug(self, index: int = 0):
+        assert self.debug_mode, 'must be in debug mode'
+        if self._debug_history:
+            f, axis_arr = plt.subplots(1, len(self._debug_history))
+            for debug_event, axis in zip(self._debug_history, axis_arr):
+                if debug_event['channel_mode'] == ('GRAY',):
+                    plt.set_cmap('gray')
+                axis.imshow(debug_event['images'][index], aspect="auto")
+                arg_str = ', '.join(map(str, debug_event['fn_args']['args']))
+                kwarg_str = ', '.join(['{}={}'.format(k, v) for k, v in debug_event['fn_args']['kwargs'].items()])
+                axis.set_title('{}(\n    {}, \n    {})'.format(debug_event['fn_name'],
+                                                               arg_str,
+                                                               kwarg_str),
+                               loc='left')
+        else:
+            plt.text('No operations to sho')
+        plt.show()
 
     def save(self):
         raise NotImplementedError
@@ -62,6 +81,7 @@ class Images(object):
             relative_bottom_left[1] /= self._original_size[1]
         return tuple(relative_bottom_left), tuple(relative_top_right)
 
+    @History.debug()
     def convert_color(self, channel_mode: tuple):
         assert channel_mode in COLOUR_MODES, '{} not a valid colour mode.\n' \
                                              'Please use one of {}'.format(channel_mode, COLOUR_MODES)
@@ -72,12 +92,14 @@ class Images(object):
         self.images = [cv2.cvtColor(image, getattr(cv2, conversion_str)) for image in self.images]
         self.channel_mode = channel_mode
 
+    @History.debug()
     def select_channel(self, channel: str = 'R'):
         assert channel in self.channel_mode, 'channel {} not in channel_mode {}, ' \
                                              'you might need to apply convert_color ' \
                                              'first'.format(channel, self.channel_mode)
         channel_index = self.channel_mode.index(channel)
         self.images = [_repeat_c_channels(image[..., channel_index]) for image in self.images]
+        self.channel_mode = ('GRAY', )
 
     @classmethod
     def from_array(cls,
@@ -86,6 +108,7 @@ class Images(object):
                    debug_mode: bool = False):
 
         obj = cls(src=None, debug_mode=debug_mode)
+        images = None
         if array.ndim == 4:
             images = [_repeat_c_channels(x) for x in array]
 
@@ -104,9 +127,12 @@ class Images(object):
             assert channel_mode == ('GRAY',), "channel_mode must be ('GRAY',) if array.ndim == 2"
             images = [_repeat_c_channels(array)]
 
-        obj.images = images
-        obj._original_size = obj.size
-        obj.channel_mode = channel_mode
+        if images:
+            obj.images = images
+            obj._original_size = obj.size
+            obj.channel_mode = channel_mode
+        else:
+            raise IOError('No images could be read from the array provided')
 
     def as_array(self) -> np.ndarray:
         assert self.size is not None, 'All images must have same size to convert to numpy array.'
@@ -193,25 +219,30 @@ class Images(object):
     def transform_polygon(self, vertices: list, start_event: str = 'start', end_event: str = 'end') -> list:
         return [self.transform_point(point, start_event, end_event) for point in vertices]
 
+    @History.debug()
     def shear(self, shear_intensity: float, fill_mode: str = 'constant',
               c_val: float = 0., interpolation_order: int = 1) -> None:
         self._affine_transform(shear=shear_intensity, fill_mode=fill_mode, c_val=c_val, order=interpolation_order)
 
+    @History.debug()
     def zoom(self, zoom_range: tuple, fill_mode: str = 'constant', c_val: float = 0.,
              interpolation_order: int = 1) -> None:
         zx, zy = zoom_range
         self._affine_transform(zx=zx, zy=zy, fill_mode=fill_mode, c_val=c_val, order=interpolation_order)
 
+    @History.debug()
     def rotate(self, theta: float, fill_mode: str = 'constant', c_val: float = 0.,
                interpolation_order: int = 1) -> None:
         self._affine_transform(theta=theta, fill_mode=fill_mode, c_val=c_val, order=interpolation_order)
 
+    @History.debug()
     def translate(self, x: int = 0, y: int = 0, fill_mode: str = 'constant', c_val: float = 0.,
                   interpolation_order: int = 1):
         self._affine_transform(tx=x, ty=y,
                                fill_mode=fill_mode, c_val=c_val,
                                order=interpolation_order)
 
+    @History.debug()
     def crop(self,
              y_min: typing.Optional[int] = None,
              y_max: typing.Optional[int] = None,
@@ -225,6 +256,7 @@ class Images(object):
 
         self._crop(top, bottom, left, right)
 
+    @History.debug()
     def resize(self,
                target_size: tuple,
                preserve_aspect_ratio: bool = False) -> None:
@@ -249,6 +281,7 @@ class Images(object):
 
         self._resize(fx=fx, fy=fy)
 
+    @History.debug()
     def pad(self,
             top: typing.Optional[int] = None,
             bottom: typing.Optional[int] = None,
@@ -265,6 +298,8 @@ class Images(object):
 
     def label_event(self, label: str) -> None:
         self._transform_history[-1].update({'label': label})
+        if self.debug_mode:
+            self._debug_history[-1].update({'label': label})
 
     def show(self, index: int = 0):
         plt.imshow(self.images[index])
