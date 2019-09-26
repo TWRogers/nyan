@@ -8,7 +8,7 @@ class Sequential(Images):
 
     def __init__(self,
                  wildcard: str,
-                 channel_mode: str = 'RGB',
+                 channel_mode: tuple = ('R', 'G', 'B'),
                  debug_mode: bool = False) -> None:
 
         super(Sequential, self).__init__(images=None,

@@ -7,7 +7,7 @@ class Video(Images):
 
     def __init__(self,
                  file_path: str = None,
-                 channel_mode: str = 'RGB',
+                 channel_mode: tuple = ('R', 'G', 'B'),
                  debug_mode: bool = False) -> None:
 
         super(Video, self).__init__(images=None,
@@ -19,6 +19,7 @@ class Video(Images):
         if file_path is not None:
             reader = imageio.get_reader(file_path, "ffmpeg")
             self.images = [image for image in reader]
+        self.channel_mode = ('R', 'G', 'B')
 
     def save(self):
         raise NotImplementedError

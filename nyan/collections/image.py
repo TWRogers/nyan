@@ -8,7 +8,7 @@ class Image(Images):
 
     def __init__(self,
                  filepath: typing.Optional[str] = None,
-                 channel_mode: str = 'RGB',
+                 channel_mode: tuple = ('R', 'G', 'B'),
                  debug_mode: bool = False) -> None:
 
         super(Image, self).__init__(images=None,

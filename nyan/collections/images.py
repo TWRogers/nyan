@@ -11,24 +11,62 @@ try:
 except ImportError:
     scipy = None
 
-COLOUR_MODES = ('RGB', 'BGR')
+
+COLOUR_MODES = [('R', 'G', 'B'),
+                ('B', 'G', 'R'),
+                ('X', 'Y', 'Z'),
+                ('Y', 'Cr', 'Cb'),
+                ('L', 'a', 'b'),
+                ('L', 'u', 'v'),
+                ('H', 'L', 'S'),
+                ('H', 'S', 'V'),
+                ('GRAY',)]
 
 
 class Images(object):
 
     def __init__(self,
                  images: typing.Optional[list] = None,
-                 channel_mode: str = 'RGB',
+                 channel_mode: tuple = ('R', 'G', 'B'),
                  debug_mode: bool = False) -> None:
-
+        assert channel_mode in COLOUR_MODES
         self.channel_mode = channel_mode
         self.debug_mode = debug_mode
 
         self.images = [] if images is None else images
-        self._original_images = [] if images is None else images.copy()
+        self._original_size = self.size
 
         self._transform_history = []
         self._debug_history = []
+
+    def get_relative_coords(self, normalise=False):
+        top_right = self.size
+        bottom_left = (0, 0)
+        relative_top_right = self.transform_point(top_right, 'end', 'start')
+        relative_bottom_left = self.transform_point(bottom_left, 'end', 'start')
+        if normalise:
+            relative_top_right[0] /= top_right[0]
+            relative_top_right[1] /= top_right[1]
+            relative_bottom_left[0] /= top_right[0]
+            relative_bottom_left[1] /= top_right[1]
+        return relative_bottom_left, relative_top_right
+
+    def convert_color(self, channel_mode: tuple):
+        assert channel_mode in COLOUR_MODES, '{} not a valid colour mode.\n' \
+                                             'Please use one of {}'.format(channel_mode, COLOUR_MODES)
+        assert self.channel_mode != ('GRAY',), 'Cannot convert from gray to a colour space.'
+        conversion_str = "COLOR_{}2{}".format(''.join(self.channel_mode), ''.join(channel_mode))
+        assert hasattr(cv2, conversion_str), \
+            '{} does not appear to be a valid cv2 colour conversion'.format(conversion_str)
+        self.images = [cv2.cvtColor(image, getattr(cv2, conversion_str)) for image in self.images]
+        self.channel_mode = channel_mode
+
+    def select_channel(self, channel: str = 'R'):
+        assert channel in self.channel_mode, 'channel {} not in channel_mode {}, ' \
+                                             'you might need to apply convert_color ' \
+                                             'first'.format(channel, self.channel_mode)
+        channel_index = self.channel_mode.index(channel)
+        self.images = [_repeat_c_channels(image[..., channel_index]) for image in self.images]
 
     def load(self):
         raise NotImplementedError
@@ -39,18 +77,20 @@ class Images(object):
     @classmethod
     def from_array(cls,
                    array: np.ndarray,
-                   channel_mode: typing.Optional[str] = 'RGB',
+                   channel_mode: typing.Optional[tuple] = ('R', 'G', 'B'),
                    debug_mode: bool = False):
 
         if array.ndim == 4:
-            return cls(images=[x for x in array],
+            return cls(images=[_repeat_c_channels(x) for x in array],
                        channel_mode=channel_mode,
                        debug_mode=debug_mode)
 
         elif array.ndim == 3:
             if array.shape[2] == 1:
-                assert channel_mode is None, 'channel_mode must be None if array.ndim == 3 and array.shape[2] == 1'
-                return cls(images=[array],
+                assert channel_mode == ('GRAY',), "channel_mode must be ('GRAY',) " \
+                                                  "if array.ndim == 3 and array.shape[2] == 1"
+
+                return cls(images=[_repeat_c_channels(array)],
                            channel_mode=channel_mode,
                            debug_mode=debug_mode)
             elif array.shape[2] == 3:
@@ -61,8 +101,8 @@ class Images(object):
                            debug_mode=debug_mode)
 
         elif array.ndim == 2:
-            assert channel_mode is None, 'channel_mode must be None if array.ndim == 2'
-            return cls(images=[np.expand_dims(array, axis=2)],
+            assert channel_mode == ('GRAY',), "channel_mode must be ('GRAY',) if array.ndim == 2"
+            return cls(images=[_repeat_c_channels(array)],
                        channel_mode=channel_mode,
                        debug_mode=debug_mode)
 
@@ -99,7 +139,7 @@ class Images(object):
         new_copy.channel_mode = self.channel_mode
         new_copy.debug_mode = self.debug_mode
         new_copy.images = [im.copy() for im in self.images]
-        new_copy._original_images = [im.copy() for im in self._original_images]
+        new_copy._original_size = self._original_size
         new_copy._transform_history = self._transform_history.copy()
         new_copy._debug_history = self._debug_history.copy()
 
@@ -388,7 +428,7 @@ class Images(object):
             module=self.__class__.__module__,
             name=self.__class__.__name__,
             n_images=len(self),
-            channel_mode=self.channel_mode,
+            channel_mode=''.join(self.channel_mode),
             size=self.size,
             id=id(self))
 
@@ -489,3 +529,14 @@ def _apply_affine_transform(x: np.ndarray, final_affine_matrix: np.ndarray, fina
         x = np.stack(channel_images, axis=0)
         x = np.rollaxis(x, 0, 2 + 1)
     return x
+
+
+def _repeat_c_channels(image):
+    if image.ndim == 2:
+        return np.repeat(np.expand_dims(image, axis=2), repeats=3, axis=2)
+    elif image.ndim == 3 and image.shape[-1] == 1:
+        return np.repeat(image, repeats=3, axis=2)
+    elif image.ndim == 3 and image.shape[-1] == 3:
+        return image
+    else:
+        raise ValueError('invalid image ndim {} and shape {}'.format(image.ndim, image.shape))
