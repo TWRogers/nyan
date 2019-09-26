@@ -257,8 +257,7 @@ class Images(object):
                preserve_aspect_ratio: bool = False) -> None:
         # TODO: implement preserve_aspect_ratio
         if (target_size[0] is None) and (target_size[1] is None):
-            fx = 1.
-            fy = 1.
+            fx, fy = 1., 1.
         elif target_size[0] is None:
             fy = target_size[1] / self.size[1]
             if preserve_aspect_ratio:
@@ -325,11 +324,9 @@ class Images(object):
 
     @property
     def __array_interface__(self) -> dict:
-        # TODO: implement numpy array interface
-        raise NotImplementedError
-    #   # support for casting to a numpy array
-    #   array = self.as_array()
-    #   return {"typestr": array.dtype,
-    #           "shape": self.shape,
-    #           "version": 3,
-    #           "data": array.tobytes()}
+        array = self.as_array()
+        return {"typestr": array.dtype.str,
+                "descr": array.dtype.descr,
+                "shape": array.shape,
+                "version": 3,
+                "data": array.tobytes()}
