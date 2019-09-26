@@ -7,7 +7,7 @@ import typing
 class Sequential(Images):
 
     def __init__(self,
-                 wildcard: typing.Optional[str] = None,
+                 wildcard: str,
                  channel_mode: str = 'RGB',
                  debug_mode: bool = False) -> None:
 
@@ -18,3 +18,6 @@ class Sequential(Images):
 
     def load(self, wildcard: typing.Optional[str] = None) -> None:
         self.images = [IMREAD_FN(file_path) for file_path in glob.glob(wildcard)]
+
+    def save(self):
+        raise NotImplementedError
