@@ -30,7 +30,8 @@ setup(name='nyan',
           'imageio',
           'opencv-python',
           'imageio-ffmpeg',
-          'matplotlib'
+          'matplotlib',
+          'scipy'
       ],
       tests_require=[
           'pytest',

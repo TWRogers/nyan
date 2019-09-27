@@ -13,7 +13,7 @@ boxes or segmentation masks, and (iii) transform those results back to the origi
 the image.
 
 ## Installation
-From the 
+To install, simply clone this repository and use [pip](https://pypi.org/project/pip/) to install.
 ```bash
 git clone https://github.com/TWRogers/nyan.git
 pip install -e nyan
