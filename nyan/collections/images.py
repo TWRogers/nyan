@@ -31,6 +31,23 @@ class Images(object):
     def _load(self, src: str):
         raise NotImplementedError
 
+    def to_bytes(self):
+        return self.as_array().tobytes()
+
+    @classmethod
+    def from_buffer(cls,
+                    buffer: bytes,
+                    shape: tuple,
+                    dtype: np.dtype = np.uint8,
+                    channel_mode: tuple = ('R', 'G', 'B'),
+                    debug_mode: bool = False,
+                    count: int = -1,
+                    offset: int = 0):
+
+        return cls.from_array(np.reshape(np.frombuffer(buffer, dtype=dtype, count=count, offset=offset), shape),
+                              channel_mode=channel_mode,
+                              debug_mode=debug_mode)
+
     @History.debug()
     def load(self, src: str):
         self._load(src)
@@ -573,6 +590,10 @@ class Images(object):
 
     def __len__(self) -> int:
         return len(self.images)
+
+    @property
+    def n_images(self):
+        return len(self)
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
