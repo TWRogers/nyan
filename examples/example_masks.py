@@ -9,9 +9,7 @@ if __name__ == '__main__':
     video = Video(fp=EXAMPLE_VIDEO, debug_mode=True)
 
                                           # perform some arbitrary pre-processing:
-    print(video)
     video = video[:, 128:-128]            # . crop 128 pixels off of the left and right of the video
-    print(video)
     video.rotate(-45.)                    # . rotate video by -45 degrees
     video.zoom((1.1, 1.))                 # . zoom into video by 10% in the y-direction
     video.convert_color(('H', 'S', 'V'))  # . convert the video to HSV colour space
