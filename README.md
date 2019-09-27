@@ -57,6 +57,7 @@ Next, it loads a collection of segmentation masks ...
 ... and transforms them into the same space as the pre-processed video
 
 ![alt text](./static/examples/masks_mapped.png)
+![alt text](./static/examples/video_mapped.png)
 
 Finally, it transforms the mask back to the original space as a sanity check
 
