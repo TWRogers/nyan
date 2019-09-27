@@ -613,12 +613,14 @@ def _get_affine_transformation_matrix(size: tuple,
     if theta != 0:
         theta = np.deg2rad(theta)
         rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0],
-                                    [np.sin(theta),
-                                     np.cos(theta), 0], [0, 0, 1]])
+                                    [np.sin(theta), np.cos(theta), 0],
+                                    [0, 0, 1]])
         transform_matrix = rotation_matrix
 
     if tx != 0 or ty != 0:
-        shift_matrix = np.array([[1, 0, tx], [0, 1, ty], [0, 0, 1]])
+        shift_matrix = np.array([[1, 0, tx],
+                                 [0, 1, ty],
+                                 [0, 0, 1]])
         if transform_matrix is None:
             transform_matrix = shift_matrix
         else:
@@ -626,8 +628,8 @@ def _get_affine_transformation_matrix(size: tuple,
 
     if shear != 0:
         shear = np.deg2rad(shear)
-        shear_matrix = np.array([[1, -np.sin(shear), 0], [0,
-                                                          np.cos(shear), 0],
+        shear_matrix = np.array([[1, -np.sin(shear), 0],
+                                 [0, np.cos(shear), 0],
                                  [0, 0, 1]])
         if transform_matrix is None:
             transform_matrix = shear_matrix
@@ -635,7 +637,9 @@ def _get_affine_transformation_matrix(size: tuple,
             transform_matrix = np.dot(transform_matrix, shear_matrix)
 
     if zx != 1 or zy != 1:
-        zoom_matrix = np.array([[zx, 0, 0], [0, zy, 0], [0, 0, 1]])
+        zoom_matrix = np.array([[zx, 0, 0],
+                                [0, zy, 0],
+                                [0, 0, 1]])
         if transform_matrix is None:
             transform_matrix = zoom_matrix
         else:

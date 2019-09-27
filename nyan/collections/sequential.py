@@ -9,7 +9,6 @@ class Sequential(Images):
 
         super(Sequential, self).__init__(src=directory_wildcard,
                                          debug_mode=debug_mode)
-        self.load(directory_wildcard)
 
     def _load(self, fp: str) -> None:
         self.images = [IMREAD_FN(file_path) for file_path in glob.glob(fp)]
