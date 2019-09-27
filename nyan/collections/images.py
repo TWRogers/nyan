@@ -153,6 +153,8 @@ class Images(object):
         else:
             raise IOError('No images could be read from the array provided')
 
+        return obj
+
     def as_array(self) -> np.ndarray:
         assert self.size is not None, 'All images must have same size to convert to numpy array.'
         return np.array(self.images)
@@ -181,7 +183,7 @@ class Images(object):
 
     def copy(self):
 
-        new_copy = self.__class__()
+        new_copy = self.__class__(src=None)
 
         new_copy.channel_mode = self.channel_mode
         new_copy.debug_mode = self.debug_mode
@@ -596,7 +598,12 @@ class Images(object):
         return len(self)
 
     def __eq__(self, other):
-        return self.__dict__ == other.__dict__
+        self_dict = self.__dict__
+        other_dict = other.__dict__
+        self_images = self_dict.pop('images')
+        other_images = other_dict.pop('images')
+        return self.__dict__ == other.__dict__ and all(np.all(im_other == im_self)
+                                                       for im_other, im_self in zip(other_images, self_images))
 
     def __repr__(self) -> str:
         return "<{module}.{name} {n_images} images channel_mode={channel_mode} size={size} at 0x{id}>".format(
