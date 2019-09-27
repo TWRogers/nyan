@@ -67,7 +67,7 @@ class Images(object):
                     '{}={}'.format(k, v)
                     for k, v in debug_event['fn_args']['kwargs'].items()
                 ])
-                axis.set_title('{}(\n    {}, \n    {})'.format(
+                axis.set_title('\n{}(\n    {}, \n    {})'.format(
                     debug_event['fn_name'], arg_str, kwarg_str),
                                loc='left')
         else:
@@ -183,7 +183,7 @@ class Images(object):
 
     def copy(self):
 
-        new_copy = self.__class__(src=None)
+        new_copy = self.__class__()
 
         new_copy.channel_mode = self.channel_mode
         new_copy.debug_mode = self.debug_mode
@@ -583,8 +583,9 @@ class Images(object):
     def __getitem__(self, key):
         sliced_object = self.copy()
         top, bottom, left, right = self._get_crop_from_slice(key)
+        x_max, y_max = self.size
         if any((top, bottom, left, right)):
-            sliced_object._crop(top, bottom, left, right)
+            sliced_object.crop(top, y_max-bottom, left, x_max-right)
         return sliced_object
 
     def __iter__(self) -> iter:
